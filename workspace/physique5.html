@@ -1,0 +1,263 @@
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<title>Compound Shapes - Physijs</title>
+	
+	<link rel="stylesheet" type="text/css" href="css/styles1.css" />
+	<script type="text/javascript" src="./js/three.min.js"></script>
+	<script src='../js/OrbitControls.js'></script>
+	<script type="text/javascript" src="./js/physi.js"></script>
+	<script type="text/javascript" src="./js/Stats.js"></script>
+	<script type="text/javascript" src="./js/perlin.js"></script>
+	<link rel="stylesheet" type="text/css" href="../css/style.css" />
+	
+</head>
+
+<body>
+	
+</body>
+
+<script type="text/javascript">
+
+	
+	Physijs.scripts.worker = 'js/physijs_worker.js';
+	Physijs.scripts.ammo = './ammo.js';
+	
+	var renderer, render_stats, physics_stats, scene, camera;
+	
+	
+		
+	renderer = new THREE.WebGLRenderer({ antialias: true });
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.shadowMap.enabled = true;
+	renderer.shadowMapSoft = true;
+	document.body.appendChild( renderer.domElement );
+	
+	scene = new Physijs.Scene;
+	scene.setGravity(new THREE.Vector3( 0, -20, 0 ));
+	
+	
+	//initialisation des textures du cube interne dans la  skybox
+
+		var urls = [
+			"images/planet_negx.jpg",
+			"images/planet_posx.jpg",
+			"images/planet_posy.jpg",
+			"images/planet_negy.jpg",
+			"images/planet_posz.jpg",
+			"images/planet_negz.jpg",
+		]
+
+		// Rappel de la Propriéré du positionnement des images dans une skybox
+		//"images/posx.jpg",
+		//"images/negx.jpg",
+		//"images/posy.jpg",
+		//"images/negy.jpg",
+		//"images/posz.jpg",
+		//"images/negz.jpg",
+
+		//Creation des textures de la skybox
+		var reflectionCube = new THREE.CubeTextureLoader().load(urls);
+		reflectionCube.format = THREE.RGBFormat;
+
+		var refractionCube = new THREE.CubeTextureLoader().load(urls);
+		refractionCube.mapping = THREE.CubeRefractionMapping;
+		refractionCube.format = THREE.RGBFormat;
+
+		// Création de la Skybox
+
+		var shader = THREE.ShaderLib["cube"];
+		shader.uniforms["tCube"].value = reflectionCube;
+
+		var material = new THREE.ShaderMaterial({
+
+				fragmentShader : shader.fragmentShader,
+				vertexShader : shader.vertexShader,
+				uniforms : shader.uniforms,
+				depthWrite : false,
+				side : THREE.BackSide
+
+			}),
+		// la taille de la Skybox cube et on ajoute la parie texture ShaderMaterial = material
+		mesh = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000), material);
+		scene.add(mesh);
+	
+	
+	camera = new
+	THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,0.1,10000);
+	camera.position.set(0,10,50)
+	camera.lookAt(scene.position);
+	
+	var controls	= new THREE.OrbitControls(camera);
+	
+	// ajout de la lumière ambient
+	var light = new THREE.AmbientLight(0x020202)
+		scene.add(light)
+		// ajout de la lumière face avant du décors
+		var light = new THREE.DirectionalLight('white', 1)
+		light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+		scene.add(light)
+		light.castShadow = true
+		light.shadow.camera.near = 0.01
+		light.shadow.camera.far = 250
+		light.shadow.camera.fov = 45
+		light.shadow.camera.left = -20
+		light.shadow.camera.right = 20
+		light.shadow.camera.top = 30
+		light.shadow.camera.bottom = -30
+		// light.shadowCameraVisible	= true
+		light.shadow.bias = 0.001
+		light.shadow.darkness = 0.6
+		light.shadow.mapSize.width = 2048
+		light.shadow.mapSize.height = 2048
+	
+	
+	
+	var cubeGeo= new THREE.BoxGeometry(4,4,4);
+	var mat=new THREE.MeshLambertMaterial({color: 0xeeeeee});
+	var matCube= Physijs.createMaterial (mat,0.5,0.9);
+	var cube = new Physijs.BoxMesh(cubeGeo,matCube);
+	cube.position.x=-20;
+	cube.position.y=20;
+	cube.rotation.z=Math.PI/3;
+	cube.name="cub";
+	
+	//scene.add(cube);
+	
+		render_stats = new Stats();
+		render_stats.domElement.style.position = 'absolute';
+		render_stats.domElement.style.top = '0px';
+		render_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( render_stats.domElement );
+		
+		physics_stats = new Stats();
+		physics_stats.domElement.style.position = 'absolute';
+		physics_stats.domElement.style.top = '50px';
+		physics_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( physics_stats.domElement );
+	
+	
+	//navette avec Physi
+	
+	var loader = new THREE.JSONLoader();
+	loader.load('../json/navette1.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,1.5,5); // friction elastic
+		navette = new Physijs.BoxMesh(geometry, matCube);
+		navette.translation = THREE.GeometryUtils.center(geometry);
+		navette.scale.x = navette.scale.y = navette.scale.z = 5;
+		navette.position.x = -20;
+		navette.position.y = 20;
+		navette.position.z = Math.PI/3;
+		navette.name= "La Navette de Blender"
+		scene.add(navette);
+	});
+	
+	// Base alpha avec physi
+		var mesh = null;
+		var loader = new THREE.JSONLoader();
+		loader.load('./json/moonbase.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,1.5,5); // friction elastic
+		basealfa = new Physijs.BoxMesh(geometry, matCube);
+		basealfa = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		basealfa.scale.x = basealfa.scale.y = basealfa.scale.z = 10;
+		basealfa.translation = THREE.GeometryUtils.center(geometry);
+		basealfa.position.x = 20;
+		basealfa.position.y = -78;
+		basealfa.position.z = 0;
+		
+		scene.add(basealfa);
+		});
+	
+	
+		// Montagne avec physi
+		var mesh = null;
+		var loader = new THREE.JSONLoader();
+		loader.load('./json/moon.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,1.5,5); // friction elastic
+		decor= new Physijs.BoxMesh(geometry, matCube);
+		decor = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		decor.scale.x = decor.scale.y = decor.scale.z = 15;
+		decor.translation = THREE.GeometryUtils.center(geometry);
+		decor.position.x = 20;
+		decor.position.y = 5;
+		decor.position.z = 0;
+		
+		scene.add(decor);
+		});
+	
+	
+	
+	
+	// initialisation du terrain
+	var date = new Date();
+	var pn = new Perlin('rnd' + date.getTime());
+	
+	function createHeightMap(pn) {
+	 var ground_material = Physijs.createMaterial(
+	 new THREE.MeshLambertMaterial({
+	 map: THREE.ImageUtils.loadTexture(	 '../images/texture.jpg')
+	 }),
+	 0.3, // high friction
+	 0.8 // low restitution
+	 );
+	 var ground_geometry = new THREE.PlaneGeometry(300, 300, 100, 100);
+	 for (var i = 0; i < ground_geometry.vertices.length; i++) {
+	 var vertex = ground_geometry.vertices[i];
+	 var value = pn.noise(vertex.x / 30, vertex.y / 30, 0);
+	 vertex.z = value * 10;
+	 }
+	 ground_geometry.computeFaceNormals();
+	 ground_geometry.computeVertexNormals();
+	 var ground = new Physijs.HeightfieldMesh(
+	 ground_geometry,
+	 ground_material,
+	 0, // mass
+	 100,
+	 100
+	 );
+	 ground.position.y =-20;
+	 ground.rotation.x = Math.PI/-2 ;
+	 ground.rotation.y = 0;
+	 ground.receiveShadow = true;
+	 return ground;
+	}	
+	
+	terrain=createHeightMap(pn);
+//	scene.add(terrain)
+	
+	
+	
+	
+	var solGeo= new THREE.BoxGeometry(100,1,20);
+	var matSol= Physijs.createMaterial (mat,0,0);
+	var sol = new Physijs.BoxMesh(solGeo,matSol,0);
+	sol.position.y=-78;
+	sol.name="le sol de Cosmos 2016"
+	scene.add(sol);
+	
+sol.addEventListener('collision',function(obj){
+	       alert("collision entre "+this.name+" et "+obj.name);
+	});
+	
+	
+	function render() {
+	       requestAnimationFrame(render);
+	       scene.simulate();
+	       camera.lookAt(navette.position);
+	       renderer.render(scene, camera);
+	       render_stats.update();
+	       physics_stats.update();
+	} render();
+	
+	
+	
+	
+	</script>
+
+</html>

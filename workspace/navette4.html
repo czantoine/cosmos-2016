@@ -1,0 +1,292 @@
+
+<!DOCTYPE html>
+<!--//
+// Initialisation d'une scene 
+// Integration de l'objet navette importé de blender en format Json
+// Gestion de la navette au clavier avec la librairie threex.keyboardstate.js 
+// Integration du son quand la navette bouge 
+// Intégration des parametres de la velocité pour donner un effet non saccadé de la navette
+// modification du son avec une boucle d'arret et de repise en cas de mouvement pour ne plus avoir de Haschage du son
+// Integration du decors et de la base alpha
+// Ajout de la camera pour suivre la navette dans son déplacement
+-->
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<script src='../js/three.js'></script>
+<script src='../js/OrbitControls.js'></script>
+<script src="../js/threex.keyboardstate.js"></script>
+<body style='margin: 0px; overflow: hidden; text-align:center;'>
+
+<audio id="sounddown"><source src="./audio/down.mp3" /></audio>
+<audio id="soundup"><source src="./audio/up.mp3" /></audio>
+<audio id="soundright"><source src="./audio/right.mp3" /></audio>
+<audio id="soundleft"><source src="./audio/left.mp3" /></audio>
+<audio id="soundin"><source src="./audio/in.mp3" /></audio>
+<audio id="soundinr"><source src="./audio/inr.mp3" /></audio>
+<script>
+	
+	
+	// initialisation renderer
+	var renderer	= new THREE.WebGLRenderer({
+		antialias	: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 1)
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+	
+	// array of functions for the rendering loop
+	var onRenderFcts= [];
+
+		
+	
+	var navette = null;
+    var canvas = document.getElementById('canvas'),
+	// position initiale de la navette
+		  xpos = 1,
+          ypos = 300,
+          zpos = 1,
+          vx = -1,
+          vy = -1,
+          vz = -1,
+          friction = 0.95;
+     //   fl = 250;
+  
+    var arretSonEnCours = false; // variable d'environnement pour le son basé à Faux
+
+	var updateFcts	= [];
+	var updateNavette	= [];
+	var scene	= new THREE.Scene();
+	var camera	= new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.01, 10000 );
+	// 75 represente le FOv perspective chanmp de vision de la scene grand angle sur un appareil photo
+	camera.position.y = 50;
+	camera.position.z = 550;
+
+	var controls	= new THREE.OrbitControls(camera);
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		ajout  object dans une scene
+	//////////////////////////////////////////////////////////////////////////////////
+
+	//add skymap 
+	
+var urls = [
+	
+	
+	"images/planet_negx.jpg",  
+	"images/planet_posx.jpg",  
+	"images/planet_posy.jpg", 
+	"images/planet_negy.jpg", 
+    "images/planet_posz.jpg", 
+	"images/planet_negz.jpg", 
+	
+	
+	//"images/posx.jpg", 
+	//"images/negx.jpg", 
+	//"images/posy.jpg", 
+	//"images/negy.jpg", 
+    //"images/posz.jpg", 
+	//"images/negz.jpg",
+	]
+	
+var reflectionCube = new THREE.CubeTextureLoader().load( urls );
+reflectionCube.format = THREE.RGBFormat;
+
+var refractionCube = new THREE.CubeTextureLoader().load( urls );
+refractionCube.mapping = THREE.CubeRefractionMapping;
+refractionCube.format = THREE.RGBFormat;
+
+// Creation de la Skybox
+
+var shader = THREE.ShaderLib[ "cube" ];
+shader.uniforms[ "tCube" ].value = reflectionCube;
+
+var material = new THREE.ShaderMaterial( {
+
+	fragmentShader: shader.fragmentShader,
+	vertexShader: shader.vertexShader,
+	uniforms: shader.uniforms,
+	depthWrite: false,
+	side: THREE.BackSide
+
+} ),
+
+mesh = new THREE.Mesh( new THREE.BoxGeometry( 10000, 10000, 10000 ), material );
+scene.add( mesh );
+
+		
+	//////////////////////////////////////////////////////////////////////////////////
+	//		initialisation de 3 points de lumières
+	//////////////////////////////////////////////////////////////////////////////////
+	
+		// add a ambient light
+		var light	= new THREE.AmbientLight( 0x020202 )
+		scene.add( light )
+		// add a light front right
+		var light	= new THREE.DirectionalLight('white', 1)
+		light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+		scene.add( light )
+		light.castShadow	= true
+		light.shadowCameraNear	= 0.01
+		light.shadowCameraFar	= 250
+		light.shadowCameraFov	= 45
+		light.shadowCameraLeft	= -20
+		light.shadowCameraRight	=  20
+		light.shadowCameraTop	=  30
+		light.shadowCameraBottom= -30
+		// light.shadowCameraVisible	= true
+		light.shadowBias	= 0.001
+		light.shadowDarkness	= 0.6
+		light.shadowMapWidth	= 2048
+		light.shadowMapHeight	= 2048
+		// // add a light behind
+		// var light	= new THREE.DirectionalLight('white', 0.75)
+		// light.position.set(-0.5, -0.5, -2)
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//	ajout de l'element mesh navette			//
+	//////////////////////////////////////////////////////////////////////////////////
+	var loader = new THREE.JSONLoader();
+    loader.load('../json/navette.json', function(geometry, materials) {
+        navette = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		navette.scale.x = navette.scale.y = navette.scale.z = 10;
+        navette.translation = THREE.GeometryUtils.center(geometry);
+		
+		// reprise de l'initialisation de la position de la navette utile pour la vélocité
+		navette.position.x = 1;
+		navette.position.y = 300;
+		navette.position.z = 1;
+
+        scene.add(navette);
+    });
+	
+	// importation 	du terrain de blender
+
+var mesh = null;
+    var loader = new THREE.JSONLoader();
+    loader.load('./json/moon.json', function(geometry, materials) {
+        mesh = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		mesh.scale.x = mesh.scale.y = mesh.scale.z = 120;
+        mesh.translation = THREE.GeometryUtils.center(geometry);
+		mesh.position.y =-20;
+		mesh.position.z =-450;
+
+		
+        scene.add(mesh);
+    });
+
+// importation de la moonbase de blender
+
+var mesh = null;
+    var loader = new THREE.JSONLoader();
+    loader.load('./json/moonbase.json', function(geometry, materials) {
+        mesh = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		mesh.scale.x = mesh.scale.y = mesh.scale.z = 25;
+        mesh.translation = THREE.GeometryUtils.center(geometry);
+		mesh.position.x =-30;
+		mesh.position.y =-160;
+		mesh.position.z =-550;
+
+		
+        scene.add(mesh);
+    });
+	
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Parametrage clavier monter descendre droite gauche et zoom et rotation
+	//////////////////////////////////////////////////////////////////////////////////
+	var keyboard	= new THREEx.KeyboardState(renderer.domElement);
+	renderer.domElement.setAttribute("tabIndex", "0");
+	renderer.domElement.focus();
+        
+	updateFcts.push(function(delta, now){
+        xpos += vx;
+        ypos += vy;
+        zpos += vz;
+        vx *= friction;
+        vy *= friction;
+        vz *= friction;	
+		if( keyboard.pressed('down') ){
+			sounddown.play();
+			navette.position.y -= ypos * delta;
+			vy -= 0.5;
+			navette.scale.x = navette.scale.y = navette.scale.z +=0.1;
+		}else if( keyboard.pressed('up') ){
+			soundup.play();
+			navette.position.y += ypos * delta;
+			vy += 0.5;
+			navette.scale.x = navette.scale.y = navette.scale.z -=0.1;
+		}
+		if( keyboard.pressed('right') ){
+			soundright.play();
+			navette.position.x += xpos * delta;	
+			vx += 0.5;	
+		}else if( keyboard.pressed('left') ){
+			soundleft.play();
+			navette.position.x -= xpos * delta;	
+			vx -= 0.5;		
+		}
+		if( keyboard.pressed('A') ){
+			soundin.play();
+			navette.rotation.y -=0.001 ;		
+		}else if( keyboard.pressed('E') ){
+			soundinr.play();
+			navette.rotation.y +=0.001 ;
+		}
+		navette.position.y = ypos;
+		navette.position.x = xpos;
+
+	})
+	
+	// seulement si up
+	keyboard.domElement.addEventListener('keyup', function(event){
+		if(arretSonEnCours === false) // si la programmation de l'arret du son n'est pas programmé il lance l'arret du son
+		{
+			arretSonEnCours = true;  // initialiiation a vrai
+			setInterval(arretson, 10000); // en millsecondes = 10s
+		}
+	})
+	
+	function arretson(){
+	sounddown.pause();
+	soundup.pause();
+	soundright.pause();
+	soundleft.pause();
+	soundin.pause();
+	soundinr.pause();
+	arretSonEnCours = false;
+	}
+	
+//		if( keyboard.eventMatches(event, 'a') )	mesh.scale.x	*= 2
+//		if( keyboard.eventMatches(event, 'd') )	mesh.scale.x	/= 2
+	
+
+
+
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render initalisation  de la scene et de la camera						//
+	//////////////////////////////////////////////////////////////////////////////////
+	updateFcts.push(function(){	
+		
+		//la camera suit l'objet navette dans son déplacement 
+		camera.lookAt(navette.position);
+
+		renderer.render( scene, camera );	
+	})
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		loop runner							//
+	//////////////////////////////////////////////////////////////////////////////////
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		updateFcts.forEach(function(updateFn){
+			updateFn(deltaMsec/100, nowMsec/100)
+		})
+	})
+</script></body>

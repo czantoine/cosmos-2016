@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<title>Compound Shapes - Physijs</title>
+	
+	<link rel="stylesheet" type="text/css" href="css/styles1.css" />
+	
+	<script type="text/javascript" src="./js/three.min.js"></script>
+	<script type="text/javascript" src="./js/Stats.js"></script>
+	<script type="text/javascript" src="./js/physi.js"></script>
+	<script src='./js/OrbitControls.js'></script>
+	<script src="./js/threex.keyboardstate.js"></script>
+	<script src="./js/jquery-1.11.1.js"></script>
+	
+	<script type="text/javascript">
+	
+	'use strict';
+	
+	Physijs.scripts.worker = '../js/physijs_worker.js';
+	Physijs.scripts.ammo = '../js/ammo.js';
+	
+	var initScene, render, renderer, render_stats, physics_stats, scene, ground, light, camera, createShape ,
+		ground_material, chair_material, loader;
+	
+	initScene = function() {
+		renderer = new THREE.WebGLRenderer({ antialias: true });
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMapSoft = true;
+		document.body.appendChild( renderer.domElement );
+		
+		render_stats = new Stats();
+		render_stats.domElement.style.position = 'absolute';
+		render_stats.domElement.style.top = '0px';
+		render_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( render_stats.domElement );
+		
+		physics_stats = new Stats();
+		physics_stats.domElement.style.position = 'absolute';
+		physics_stats.domElement.style.top = '50px';
+		physics_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( physics_stats.domElement );
+		
+		scene = new Physijs.Scene;
+		scene.setGravity(new THREE.Vector3( 0, -2, 0 ));
+		scene.addEventListener(
+			'update',
+			function() {
+				scene.simulate( undefined, 2 );
+				physics_stats.update();
+			}
+		);
+		
+		camera = new THREE.PerspectiveCamera(
+			65,
+			window.innerWidth / window.innerHeight,
+			0.01,
+			10000
+		);
+		camera.position.set( 80, 80, 80 );
+		camera.lookAt( scene.position );
+		scene.add( camera );
+		
+		var controls	= new THREE.OrbitControls(camera);
+		
+		// Light
+		light = new THREE.DirectionalLight( 0xFFFFFF );
+		light.position.set( 800, 800, 200 );
+		light.target.position.copy( scene.position );
+		light.castShadow = true;
+		light.shadow.camera.left = -60;
+		light.shadow.camera.top = -60;
+		light.shadow.camera.right = 60;
+		light.shadow.camera.bottom = 60;
+		light.shadow.camera.near = 20;
+		light.shadow.camera.far = 200;
+		light.shadow.bias = -.0001
+		light.shadowMapWidth = light.shadowMapHeight = 2048;
+		scene.add( light );
+
+		// Loader
+		loader = new THREE.TextureLoader();
+		
+		//Texture "fil" pour la Navette et le terrain	
+		var wireMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe:true } );
+		var wireMaterial1 = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe:true } );
+		
+	    var loader = new THREE.JSONLoader();
+	    loader.load('../json/moon5.json', function(geometry2, materials) {
+	        
+			var geometry = new THREE.PlaneGeometry(100,100,202,202);
+			geometry.dynamic = true;
+			for ( var i = 0; i<geometry.vertices.length; i++ ) {
+			    geometry.vertices[i].x = geometry2.vertices[i].x;
+			    geometry.vertices[i].y = geometry2.vertices[i].y;
+			    geometry.vertices[i].z = geometry2.vertices[i].z;
+			}
+			
+			var terrain = new Physijs.HeightfieldMesh(
+			    geometry, 
+			    wireMaterial1,
+			    0
+			);
+			geometry.verticesNeedUpdate = true;
+			scene.add(terrain);
+	    });
+			
+		createShape ();
+		requestAnimationFrame( render );
+		scene.simulate();
+	};	
+	createShape  = (function() {
+		var addshapes = true,
+			shapes = 0,
+			sphere_geometry = new THREE.SphereGeometry( 3,32, 32 ),
+			doCreateShape;
+		
+		doCreateShape = function() {
+			var shape, material = new THREE.MeshLambertMaterial({ opacity: 0, transparent: true });
+				var wireMaterial1 = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe:false } );
+
+			shape = new Physijs.SphereMesh(
+				sphere_geometry,
+				wireMaterial1,
+				undefined,
+				{ restitution: Math.random() * 1.5 }
+			);
+				
+			shape.material.color.setRGB( Math.random() * 100 / 100, Math.random() * 100 / 100, Math.random() * 100 / 100 );
+			shape.castShadow = true;
+			shape.receiveShadow = true;
+			
+			shape.position.set(
+				Math.random() * 120 - 30,
+				80,
+				Math.random() * 120 - 30
+			);
+			
+			shape.rotation.set(
+				Math.random() * Math.PI,
+				Math.random() * Math.PI,
+				Math.random() * Math.PI
+			);
+			
+			if ( addshapes ) {
+				shape.addEventListener( 'ready', createShape );
+			}
+			scene.add( shape );
+			
+		};
+		// la boucle pour les boules qui tombent
+		return function() {
+			setTimeout( doCreateShape, 1000 ); // 10 s une boule
+		};
+	})();
+	
+	render = function() {
+		requestAnimationFrame( render );
+		renderer.render( scene, camera );
+		render_stats.update();
+	};
+	
+	window.onload = initScene;
+	
+	
+	</script>
+</head>
+
+<body>
+	
+</body>
+
+</html>

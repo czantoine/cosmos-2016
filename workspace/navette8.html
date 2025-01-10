@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<!--//
+// Initialisation d'une scene 
+// Integration de l'objet navette importé de blender en format Json
+// Gestion de la navette au clavier avec la librairie threex.keyboardstate.js
+// Integration du son quand la navette bouge 
+// Intégration des parametres de la velocité pour donner un effet non saccadé de la navette
+// Modification du son avec une boucle d'arret et de repise en cas de mouvement pour ne plus avoir de Haschage du son
+// Integration du decors et de la base alpha
+// intégration du suivi de la navette par la caméra en fonction de sa position
+// Modification des touches A et E up down et droite gauche pour piloter la navette sur les 3 axes X,Y,Z
+// Reinitialisation de la taille de la fenetre (responsive)
+// Ajout des Stats
+// Ajout d'une fenetre modale ""Aide"" sur Clic de l'Icone Information située à gauche de l'écran
+// Ajout d'une fenetre modale "Menu"" sur Clic de l'Icone Menu située à droite de l'écran
+// Gestion Interne des fenetres Modales 
+// Mise en fonctions du menu ouverture et lancement du jeu 
+// Modification du Menu des que le jeu est lancé  
+// Ajout d'un spinner avant chargment du jeu actif et dans le menu si choix Nouveau
+// Ajout du Timer decompte pour le jeu et modification du Menu si Game Over
+// Ajout des options Facile Moyen Difficile => Modification des navettes et du Timer en fonction du choix de niveau
+// modification des jeux de touches simulations d'une gravité 
+
+-->
+<head>
+	<meta charset="UTF-8" />
+	<title>Cosmos 2016 </title>
+	<link rel="icon" type="images/cosmos2016" href="images/favicon.ico" />
+	<script src='../js/three.js'></script>
+	<script src='../js/OrbitControls.js'></script>
+	<script src="../js/threex.keyboardstate.js"></script>
+	<script src="../js/Stats.js"></script>
+	<script src="../js/spin.js"></script>
+	<link rel="stylesheet" type="text/css" href="../css/style.css" />
+	<script src="../js/jquery-1.11.1.js"></script>
+
+
+<!-- Script pour la gestion des fenetres modales -->   
+<script>
+	var JeuDejaLancer = false;
+	var stats;
+	function FermetureDe(FenetreAFermer)
+	{
+		var modal = $('#' + FenetreAFermer);
+		modal.removeClass('show');
+	}
+	function OuvertureDe(FenetreAFermer,FenetreAouvrir)
+	{
+		var modal = $('#' + FenetreAouvrir);
+		var modal1 = $('#' + FenetreAFermer);
+		modal.addClass('show');
+		var close = $('.close');
+		
+		// en cliquant sur le bouton close /quitter on ferme tout et on arrête les fonctions
+		close.click(function(event)
+		{
+			$(".modal").each(function(){
+				$(this).removeClass('show');
+			});
+			modal.removeClass('show');
+			modal1.addClass('show');
+		});
+	}
+	function fermetureMenuOuvertureDe(FenetreAFermer,FenetreAouvrir)
+	{
+		FermetureDe(FenetreAFermer);
+		OuvertureDe(FenetreAFermer,FenetreAouvrir);
+	}
+	function ModificationDuMenu()
+	{
+		$("#Bouton1").html("Nouveau"); // Modifie Jouer en Nouveau
+		$("#Bouton3").html("Retour"); // Modifie Score en Retour
+	    $("#Bouton3").css("display","block"); //supression dans le menu de la touche Retour en fonction du timer
+
+		$("#Bouton3").attr("onclick", "FermetureDe('Menu');"); // Modifie l'action de Aide en Retour
+	
+	}
+</script>
+
+<!-- Script pour le spinner avant lancement du jeu -->     
+<script>
+function Progressbar() {
+		$("#container").css("display","");
+		 var opts = {
+            lines: 15, // Nombre de ligne du cercle
+            length: 30, // longueur des lignes
+            width: 10, // Epaisseur de la ligne
+            radius: 60, //  la grandeur du Cercle
+            corners: 1, // arrondi de la ligne
+            rotate: 0, // rotation dans le sens de la montre
+            color: '#fff000', // couleur du cercle
+            speed: 1, // Vitesse de roation
+            trail: 60, // 
+            shadow: false, // mode shadow
+            hwaccel: false, // accelaration et vitesse fonction du hardware
+            className: 'spinner', //  CSS classe associé
+            zIndex: 2e9, // z-index (defaults to 2000000000)
+            top: 'auto', // Top position relative 
+            left: 'auto'// Left position relative 
+        };
+        var target = document.getElementById('container');
+        var spinner = new Spinner(opts).spin(target);
+		}
+</script>
+</head>
+
+
+
+
+<body>
+		<!-- Ouverture du Spinner -->     
+		<div id="container"></div>
+		
+		<!-- Compteur qui décompte le temps de jeux -->     
+		<div id="compteur" class="timer"></div>
+
+        <!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AU MENU PRINCIPAL -->     
+        <div class="modal blur-effect" id="Menu">
+            <div class="popup-content">
+                <div>
+                   	<button class="lien-bouton" onclick="LancementJeu();" id="Bouton1">Jouer</button><br/><br/>
+					<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Level');" id="Bouton2">Niveau</button><br/><br/>
+					<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Aide1');" id="Bouton3">Aide</button><br/><br/>
+					<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Credits');" id="Bouton4">Crédits</button><br/><br/>
+					<button class="lien-bouton" onclick="window.close();" id="Bouton5">Quitter</button>
+                </div>
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+        
+        
+        <!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT A L AIDE DES TOUCHES pour l'icone Aide-->     
+        <div class="modal blur-effect" id="Aide">
+            <div class="popup-content">
+                  <div>
+                        <br/>
+                        <img class="espace" src="./images/touchedroite.png" /> 
+                        <p class="alignement">Droite +X </p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchegauche.png" /> 
+                        <p class="alignement">Gauche -X</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchemonte.png" /> 
+                        <p class="alignement">Monter +Y</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchedescente.png" /> 
+                        <p class="alignement">Descendre -Y</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchebas.png" /> 
+                        <p class="alignement">Avancer +Z</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchehaut.png" /> 
+                        <p class="alignement">Reculer -Z</p>
+                        <br/>
+                    </div>
+                  <div class="close"></div>  
+                    
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+
+		
+		<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AUX OPTIONS de NIVEAU -->     
+        <div class="modal blur-effect" id="Level">
+            <div class="popup-content">
+                <div>
+                	<div><img class="espace" src="./images/facile_opt.png" />
+                		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');"  id="BoutonFacile">Facile</button><br/><br/>
+                	</div>
+                	<div><img class="espace" src="./images/moyen_opt.png" />
+                		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');" id="BoutonMoyen">Moyen</button><br/><br/>
+                	</div>
+                	<div><img class="espace" src="./images/difficile_opt.png" />
+                		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');" id="BoutonDifficile">Avancé</button><br/><br/>
+                	</div>
+				</div>
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+        
+		<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT A l'Aide dans le Menu principal -->     
+        <div class="modal blur-effect" id="Aide1">
+            <div class="popup-content">
+                
+                    <div>
+                        <img class="espace" src="./images/touchedroite.png" /> 
+                        <p class="alignement">Droite +X </p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchegauche.png" /> 
+                        <p class="alignement">Gauche -X</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchemonte.png" /> 
+                        <p class="alignement">Monter +Y</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchedescente.png" /> 
+                        <p class="alignement">Descendre -Y</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchebas.png" /> 
+                        <p class="alignement">Avancer +Z</p>
+                    </div>
+                    <div>
+                        <img class="espace" src="./images/touchehaut.png" /> 
+                        <p class="alignement">Reculer -Z</p>
+                        <br/>
+                    </div>
+                    
+                
+                  <div class="close"></div>  
+                    
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+        
+        <!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT GAME OVER -->     
+        <div class="modal blur-effect" id="Gameover">
+            <div class="popup-content">
+                
+                    <div>
+                       <p class="alignement">Game Over </p>
+                    </div>
+                    
+                  <div class="close"></div>  
+                    
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+        
+		<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AU CREDITS -->     
+        <div class="modal blur-effect" id="Credits">
+            <div class="popup-content">
+                
+                    <div>
+                       <h3>Crédits</h3>
+						<div class="defileParent">
+							<span class="defile"> Cosmos 2016 est un jeux en 3D conçu dans le cadre de l'ISN
+							<br/><br/>Conception graphique sous Blender 2.76 et Photoshop CS6 
+							<br/><br/>Langages JavaScript, Css3, Html5
+							<br/><br/>Développé par GBH et ACZ
+							<br/><br/>Version 1.8 
+							<br/><br/>© Copyright 2016 Acz-Gbh
+							</span>
+						</div>
+                    </div>
+                    
+                  <div class="close"></div>  
+                    
+            </div>
+        </div>
+        <!-- FIN DE LA POPUP -->
+		
+		
+        <!-- CONTENU DE LA PAGE 2 Icones à Droite et à Gauche-->
+        
+            <img src="./images/icon-help.png" class="popup-button aide" data-modal="Aide">
+			<img src="./images/icon-menu.png" class="popup-button menu" data-modal="Menu">
+                                        
+        <!-- FIN DU COTENU DE LA PAGE -->
+
+        <div class="overlay"></div><!-- La div overlay -->
+        <!-- Le script qui crée la popup -->
+        <script src="../js/popup.js"></script>
+        <!-- Pour l'effet blur -->
+        <script src="../js/cssParser.js"></script>
+        
+        
+		<!-- Déclaration des sons qui seront utilisés-->
+		<audio id="sounddown"><source src="./audio/down.mp3" /></audio>
+		<audio id="soundup"><source src="./audio/up.mp3" /></audio>
+		<audio id="soundright"><source src="./audio/right.mp3" /></audio>
+		<audio id="soundleft"><source src="./audio/left.mp3" /></audio>
+		<audio id="soundin"><source src="./audio/in.mp3" /></audio>
+		<audio id="soundinr"><source src="./audio/inr.mp3" /></audio>
+		<audio id="soundexplosion"><source src="./audio/explosion.mp3" /></audio>
+
+
+ <!--Démarrage du Jeu  -->
+<script>
+
+	//Initialisation du dé-Compteur de temps et passage en parametre des navettes fonction du niveau
+	
+	var countdownTimer;
+	var seconds = 200;
+	var Jsonnavette = "navette1";
+	
+	$( "#BoutonFacile" ).click(function() {
+		seconds = 200;
+		Jsonnavette = "navette1";
+	});
+	$( "#BoutonMoyen" ).click(function() {
+		seconds = 150;
+		Jsonnavette = "navette2";
+	});
+	$( "#BoutonDifficile" ).click(function() {
+		seconds = 100;
+		Jsonnavette = "navette3";
+	});
+	
+	
+	function Decompte() {
+		var minutes = Math.round((seconds - 30)/60);
+	    var remainingSeconds = seconds % 60;
+	    var NbMenuAfficher = 0;
+	    
+	    if (remainingSeconds < 10) {
+	        remainingSeconds = "0" + remainingSeconds;  
+	    }
+	    document.getElementById('compteur').innerHTML = minutes + ":" + remainingSeconds;
+		$(".modal").each(function(){
+			if($(this).hasClass( "show" ))
+			{
+				NbMenuAfficher++;
+			}
+		});
+	    if (NbMenuAfficher == 0) {
+		    if (seconds == 0) {
+		        clearInterval(countdownTimer);
+		        OuvertureDe('Menu','Gameover');
+		  	  //      $("#Bouton3").css("display","none");
+		        document.getElementById('compteur').innerHTML = "Remise à zero en cours...";
+		    } else {
+		        seconds--;
+		    }
+	    }
+	}
+	
+	
+	OuvertureDe('Menu','Menu');
+	
+	function ArretJeu()
+	{
+		$('canvas').remove();
+		$('#FPS').remove();
+		
+	}
+	
+	function LancementJeu()
+	{
+		if(JeuDejaLancer === true)
+		{
+			ArretJeu();
+		}
+	
+		Progressbar();
+		JeuDejaLancer = true;
+		FermetureDe('Menu');
+		
+		$(".modal").each(function(){
+			$(this).removeClass('show');
+		});
+		
+		ModificationDuMenu();
+	
+		
+		
+		
+		
+		// Initialisation renderer rendu de la scene
+		var renderer	= new THREE.WebGLRenderer({
+			antialias: true
+		});
+		renderer.setClearColor(new THREE.Color('lightgrey'), 1)
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		document.body.appendChild( renderer.domElement );
+		
+			
+		var onRenderFcts= [];
+		var navette = null;
+		var container, navette, moon, moonbase;
+	    var canvas = document.getElementById('canvas'),
+		
+		// Position initiale de la navette
+			  xpos = 1,
+	          ypos = 300,
+	          zpos = 1,
+	          vx = -1,
+	          vy = -1,
+	          vz = -1,
+	          friction = 0.95;
+	     //   fl = 250;
+	  
+	    var arretSonEnCours = false; // variable d'environnement pour le son basé à Faux
+	
+		var updateFcts	= [];
+		var updateNavette	= [];
+		var CollisionList	= [];
+		
+		var scene	= new THREE.Scene();
+		var camera	= new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 10000 );
+		// 75 represente le FOv perspective chanmp de vision de la scene grand angle sur un appareil photo
+		camera.position.y = 50;
+		camera.position.z = 550;
+	
+		// Controle avec la souris et scene en mouvemnt
+		var controls	= new THREE.OrbitControls(camera);
+		
+		//////////////////////////////////////////////////////////////////////////////////
+		//		ajout  object dans une scene
+		//////////////////////////////////////////////////////////////////////////////////
+	
+		//Ajout d'un skymap dans une skybox
+		
+	var urls = [
+		"images/planet_negx.jpg",  
+		"images/planet_posx.jpg",  
+		"images/planet_posy.jpg", 
+		"images/planet_negy.jpg", 
+	    "images/planet_posz.jpg", 
+		"images/planet_negz.jpg", 
+		]
+		
+		//Propriéré du positionnement des images dans une skybox
+		//"images/posx.jpg", 
+		//"images/negx.jpg", 
+		//"images/posy.jpg", 
+		//"images/negy.jpg", 
+	    //"images/posz.jpg", 
+		//"images/negz.jpg",
+		
+		
+	var reflectionCube = new THREE.CubeTextureLoader().load( urls );
+	reflectionCube.format = THREE.RGBFormat;
+	
+	var refractionCube = new THREE.CubeTextureLoader().load( urls );
+	refractionCube.mapping = THREE.CubeRefractionMapping;
+	refractionCube.format = THREE.RGBFormat;
+	
+	// Creation de la Skybox
+	
+	var shader = THREE.ShaderLib[ "cube" ];
+	shader.uniforms[ "tCube" ].value = reflectionCube;
+	
+	var material = new THREE.ShaderMaterial( {
+	
+		fragmentShader: shader.fragmentShader,
+		vertexShader: shader.vertexShader,
+		uniforms: shader.uniforms,
+		depthWrite: false,
+		side: THREE.BackSide
+	
+	} ),
+	
+	mesh = new THREE.Mesh( new THREE.BoxGeometry( 10000, 10000, 10000 ), material );
+	scene.add( mesh );
+	
+			
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Initialisation de 3 points de lumières
+		//////////////////////////////////////////////////////////////////////////////////
+		
+		// ajout de la lumière ambient 
+		var light	= new THREE.AmbientLight( 0x020202 )
+		scene.add( light )
+		// ajout de la lumière face avant du décors
+		var light	= new THREE.DirectionalLight('white', 1)
+		light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+		scene.add( light )
+		light.castShadow	= true
+		light.shadow.camera.near	= 0.01
+		light.shadow.camera.far	= 250
+		light.shadow.camera.fov	= 45
+		light.shadow.camera.left	= -20
+		light.shadow.camera.right	=  20
+		light.shadow.camera.top	=  30
+		light.shadow.camera.bottom= -30
+		// light.shadowCameraVisible	= true
+		light.shadow.bias	= 0.001
+		light.shadow.darkness	= 0.6
+		light.shadow.mapSize.width	= 2048
+		light.shadow.mapSize.height	= 2048
+			
+		// Statistiques FPS
+		container = document.body;
+		stats = new Stats();
+		stats.domElement.style.position = 'absolute';
+		stats.domElement.style.bottom = '0px';
+		stats.domElement.style.zIndex = 100;
+		stats.domElement.setAttribute("id", "FPS");
+		container.appendChild( stats.domElement );
+		
+		
+	
+		
+		
+		//////////////////////////////////////////////////////////////////////////////////
+		//	Ajout de l'élément mesh navette												//
+		//////////////////////////////////////////////////////////////////////////////////
+		var loader = new THREE.JSONLoader();
+	    loader.load('../json/'+Jsonnavette+'.json', function(geometry, materials) {
+	        navette = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		 	
+			navette.scale.x = navette.scale.y = navette.scale.z = 20;
+	        navette.translation = THREE.GeometryUtils.center(geometry);
+			scene.add(navette);
+			   
+		function resetNavette(){
+	    navette.position.x = 1;
+	    navette.position.y = 300;
+	    navette.position.y = 1 ;
+					}
+		resetNavette()	
+		
+		// position aléatoire 
+		// function resetMoon(){
+	    // moonMesh.position.x = 5
+	    // moonMesh.position.x += 5 * (Math.random()-0.5)
+	    // moonMesh.position.y = 2 * (Math.random()-0.5)       
+	    // }
+	    //resetMoon()
+		 
+		// reprise de l'initialisation de la position de la navette utile pour la vélocité
+		navette.position.x = 1;
+		navette.position.y = 300;
+		navette.position.z = 1;
+	
+	     
+	    });
+		
+		// Importation du décor lunaire de la lune de blender
+	
+	var mesh = null;
+	    var loader = new THREE.JSONLoader();
+	    loader.load('./json/moon.json', function(geometry, materials) {
+	        decor = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+			decor.scale.x = decor.scale.y = decor.scale.z = 120;
+	        decor.translation = THREE.GeometryUtils.center(geometry);
+			decor.position.y =-20;
+			decor.position.z =-450;
+	
+	        scene.add(decor);
+	    });
+	
+	// Importation de la base alpha de blender
+	
+	var mesh = null;
+	    var loader = new THREE.JSONLoader();
+	    loader.load('./json/moonbase.json', function(geometry, materials) {
+	        basealfa = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+			basealfa.scale.x = basealfa.scale.y = basealfa.scale.z = 100;
+	        basealfa.translation = THREE.GeometryUtils.center(geometry);
+			basealfa.position.x =-30;
+			basealfa.position.y =-620;
+			basealfa.position.z =-425;
+	
+			
+	        scene.add(basealfa);
+	    });
+		
+		//Timer
+		countdownTimer = setInterval('Decompte()', 1000);
+		
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Parametrage clavier monter descendre droite gauche et avance recul  et rotation sur axe X,Y,Z
+		//////////////////////////////////////////////////////////////////////////////////
+		var keyboard	= new THREEx.KeyboardState(renderer.domElement);
+		renderer.domElement.setAttribute("tabIndex", "0");
+		renderer.domElement.focus();
+	        
+		updateFcts.push(function(delta, now){
+	        xpos += vx;
+	        ypos += vy;
+	        zpos += vz;
+	        vx *= friction;
+	        vy *= friction;
+	        vz *= friction;	
+		// montée
+			if( keyboard.pressed('E') ){
+				sounddown.play();
+				navette.position.y -= ypos * delta;
+				vy -= 0.5;
+				navette.scale.x = navette.scale.y = navette.scale.z +=0.001;
+			//descendre
+			}else if( keyboard.pressed('A') ){
+				soundup.play();
+				navette.position.y += ypos * delta;
+				vy += 0.5;
+				navette.scale.x = navette.scale.y = navette.scale.z -=0.001;
+				
+			}
+			if( keyboard.pressed('right') ){
+				soundright.play();
+				navette.position.x += xpos * delta;	
+				vx += 0.5;	
+			}else if( keyboard.pressed('left') ){
+				soundleft.play();
+				navette.position.x -= xpos * delta;	
+				vx -= 0.5;
+			}
+			
+			//deplacement Axe Z
+			if( keyboard.pressed('down') ){
+				soundright.play();
+				navette.position.z += zpos * delta;	
+				vz += 0.5;	
+			}else if( keyboard.pressed('up') ){
+				soundleft.play();
+				navette.position.z -= zpos * delta;	
+				vz -= 0.5;		
+			}
+			if( keyboard.pressed('A') ){
+				soundin.play();
+				navette.rotation.y -=0.001 ;		
+			}else if( keyboard.pressed('E') ){
+				soundinr.play();
+				navette.rotation.y +=0.001 ;
+			}else if( keyboard.pressed('Z') ){
+				soundin.play();
+				navette.position.y=ypos;
+			}
+			else {
+				navette.position.y -= ypos * delta;
+				vy -= 0.1;
+				navette.scale.x = navette.scale.y = navette.scale.z +=0.001;
+				
+			}
+			
+			navette.position.y = ypos;
+			navette.position.x = xpos;
+			navette.position.z = zpos;
+	
+		})
+		
+		// Seulement si on relache les touches action sur le son 
+		keyboard.domElement.addEventListener('keyup', function(event){
+			if(arretSonEnCours === false) // si la programmation de l'arret du son n'est pas programmé il lance l'arret du son
+			{
+				arretSonEnCours = true;  // initialiiation a vrai
+				setInterval(arretson, 10000); // en millsecondes = 10s
+			}
+			
+		})
+		
+		function arretson(){
+			sounddown.pause();
+			soundup.pause();
+			soundright.pause();
+			soundleft.pause();
+			soundin.pause();
+			soundinr.pause();
+			arretSonEnCours = false;
+		}
+		
+		// Si on change la taille de la fenetre , reinitialisation de la vue
+		window.addEventListener('resize', function(){
+			renderer.setSize( window.innerWidth, window.innerHeight )
+			camera.aspect	= window.innerWidth / window.innerHeight
+			camera.updateProjectionMatrix()		
+		}, false)
+		
+		/////////////////////////////////////////////////////////////////////////////////
+		//		render=initalisation de la scene et de la camera						//
+		//////////////////////////////////////////////////////////////////////////////////
+		updateFcts.push(function(){	
+			// Mise a jour des stats FPS
+			stats.update();
+			
+			// La camera suit l'objet navette dans son déplacement  //
+			camera.lookAt(navette.position);
+			
+			renderer.render( scene, camera );
+	    	
+	    	//Disparition de la barre spinner
+			$("#container").hide();
+	    	
+		})
+	
+	
+			
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Boucle runner- Animation dans le temps														//
+		//////////////////////////////////////////////////////////////////////////////////
+		var lastTimeMsec= null
+		requestAnimationFrame(function animate(nowMsec){
+			//Lancment de l animation 
+			requestAnimationFrame( animate );
+			// Mesure du temps
+			lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+			var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+			lastTimeMsec	= nowMsec
+			// appel des fonctions et mise à jour 
+			updateFcts.forEach(function(updateFn){
+				updateFn(deltaMsec/100, nowMsec/100)
+			})
+		})
+	}
+	
+</script>
+
+
+
+</body>

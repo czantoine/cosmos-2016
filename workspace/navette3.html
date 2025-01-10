@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<!--//
+// Initialisation d'une scene 
+// Integration de l'objet navette importé de blender en format Json
+// Gestion de la navette au clavier avec la librairie threex.keyboardstate.js
+// Integration du son quand la navette bouge 
+// Intégration des parametres de la velocité pour donner un effet non saccadé de la navette
+// modification du son avec une boucle d'arret et de repise en cas de mouvement pour ne plus avoir de Haschage du son
+-->
+
+
+<script src='../js/three.js'></script>
+<script src="../js/threex.keyboardstate.js"></script>
+<body style='margin: 0px; background-color: #bbbbbb; overflow: hidden;'>
+
+<audio id="sounddown"><source src="./audio/down.mp3" /></audio>
+<audio id="soundup"><source src="./audio/up.mp3" /></audio>
+<audio id="soundright"><source src="./audio/right.mp3" /></audio>
+<audio id="soundleft"><source src="./audio/left.mp3" /></audio>
+<audio id="soundin"><source src="./audio/in.mp3" /></audio>
+<audio id="soundinr"><source src="./audio/inr.mp3" /></audio>
+<script>
+	// initialisation renderer
+	var renderer	= new THREE.WebGLRenderer({
+		antialias	: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 1)
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+	
+	
+	var navette = null;
+    var canvas = document.getElementById('canvas'),
+		  xpos = 1,
+          ypos = 1,
+          zpos = 1,
+          vx = -1,
+          vy = -1,
+          vz = -1,
+          friction = 0.95;
+     //   fl = 250;
+  
+    var arretSonEnCours = false; // variable d'environnement pour le son basé à Faux
+
+	var updateFcts	= [];
+	var updateNavette	= [];
+	var scene	= new THREE.Scene();
+	var camera	= new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000 );
+	camera.position.z = 3;
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		initialisation de 3 points de lumières
+	//////////////////////////////////////////////////////////////////////////////////
+	
+		// add a ambient light
+		var light	= new THREE.AmbientLight( 0x020202 )
+		scene.add( light )
+		// add a light front right
+		var light	= new THREE.DirectionalLight('white', 1)
+		light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+		scene.add( light )
+		light.castShadow	= true
+		light.shadowCameraNear	= 0.01
+		light.shadowCameraFar	= 250
+		light.shadowCameraFov	= 45
+		light.shadowCameraLeft	= -20
+		light.shadowCameraRight	=  20
+		light.shadowCameraTop	=  30
+		light.shadowCameraBottom= -30
+		// light.shadowCameraVisible	= true
+		light.shadowBias	= 0.001
+		light.shadowDarkness	= 0.6
+		light.shadowMapWidth	= 2048
+		light.shadowMapHeight	= 2048
+		// // add a light behind
+		// var light	= new THREE.DirectionalLight('white', 0.75)
+		// light.position.set(-0.5, -0.5, -2)
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//	ajout de l'element mesh navette			//
+	//////////////////////////////////////////////////////////////////////////////////
+	var loader = new THREE.JSONLoader();
+    loader.load('../json/navette.json', function(geometry, materials) {
+        navette = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		navette.scale.x = navette.scale.y = navette.scale.z = 10;
+        navette.translation = THREE.GeometryUtils.center(geometry);
+		
+		navette.position.x = 50;
+		navette.position.y = 50;
+		navette.position.z =-200;
+
+        scene.add(navette);
+    });
+	
+	
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Parametrage clavier monter descendre droite gauche et zoom et rotation+ velocité
+	//////////////////////////////////////////////////////////////////////////////////
+	var keyboard	= new THREEx.KeyboardState(renderer.domElement);
+	renderer.domElement.setAttribute("tabIndex", "0");
+	renderer.domElement.focus();
+        
+	updateFcts.push(function(delta, now){
+        xpos += vx;
+        ypos += vy;
+        zpos += vz;
+        vx *= friction;
+        vy *= friction;
+        vz *= friction;	
+		if( keyboard.pressed('down') ){
+			sounddown.play();
+			navette.position.y -= ypos * delta;
+			vy -= 0.5;
+			navette.scale.x = navette.scale.y = navette.scale.z +=0.1;
+		}else if( keyboard.pressed('up') ){
+			soundup.play();
+			navette.position.y += ypos * delta;
+			vy += 0.5;
+			navette.scale.x = navette.scale.y = navette.scale.z -=0.1;
+		}
+		if( keyboard.pressed('right') ){
+			soundright.play();
+			navette.position.x += xpos * delta;	
+			vx += 0.5;	
+		}else if( keyboard.pressed('left') ){
+			soundleft.play();
+			navette.position.x -= xpos * delta;	
+			vx -= 0.5;		
+		}
+		if( keyboard.pressed('A') ){
+			soundin.play();
+			navette.rotation.y -=0.001 ;		
+		}else if( keyboard.pressed('E') ){
+			soundinr.play();
+			navette.rotation.y +=0.001 ;
+		}
+		navette.position.y = ypos;
+		navette.position.x = xpos;
+		
+		
+	})
+	
+	// seulement si up
+	keyboard.domElement.addEventListener('keyup', function(event){
+		if(arretSonEnCours === false) // si la programmation de l'arret du son n'est pas programmé il lance l'arret du son
+		{
+			arretSonEnCours = true;  // initialiiation a vrai
+			setInterval(arretson, 10000); // en millsecondes = 10s
+		}
+	})
+	
+	function arretson(){
+	sounddown.pause();
+	soundup.pause();
+	soundright.pause();
+	soundleft.pause();
+	soundin.pause();
+	soundinr.pause();
+	arretSonEnCours = false;
+	}
+	
+//		if( keyboard.eventMatches(event, 'a') )	mesh.scale.x	*= 2
+//		if( keyboard.eventMatches(event, 'd') )	mesh.scale.x	/= 2
+	
+
+
+
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render de la scene						//
+	//////////////////////////////////////////////////////////////////////////////////
+	updateFcts.push(function(){	
+		renderer.render( scene, camera );	
+	})
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		loop runner							//
+	//////////////////////////////////////////////////////////////////////////////////
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		updateFcts.forEach(function(updateFn){
+			updateFn(deltaMsec/100, nowMsec/100)
+		})
+	})
+</script></body>

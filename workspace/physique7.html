@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<!--//
+// Initialisation d'une scene 
+// Integration de l'objet navette importé de blender en format Json
+// Gestion de la navette au clavier avec la librairie threex.keyboardstate.js
+// Integration du son quand la navette bouge 
+// Intégration des parametres de la velocité pour donner un effet non saccadé de la navette
+// Modification du son avec une boucle d'arret et de repise en cas de mouvement pour ne plus avoir de Haschage du son
+// Integration du decors et de la base alpha
+// intégration du suivi de la navette par la caméra en fonction de sa position
+// Modification des touches A et E up down et droite gauche pour piloter la navette sur les 3 axes X,Y,Z
+// Reinitialisation de la taille de la fenetre (responsive)
+// Ajout des Stats
+// Ajout d'une fenetre modale ""Aide"" sur Clic de l'Icone Information située à gauche de l'écran
+// Ajout d'une fenetre modale "Menu"" sur Clic de l'Icone Menu située à droite de l'écran
+// Gestion Interne des fenetres Modales 
+// Mise en fonctions du menu ouverture et lancement du jeu 
+// Modification du Menu des que le jeu est lancé  
+// Ajout d'un spinner avant chargment du jeu actif et dans le menu si choix Nouveau
+// Ajout du Timer decompte pour le jeu et modification du Menu si Game Over
+// Ajout des options Facile Moyen Difficile => Modification des navettes et du Timer en fonction du choix de niveau
+
+-->
+
+<head>
+	<meta charset="UTF-8" />
+	<title>Cosmos 2016 </title>
+	<link rel="icon" type="images/ico" href="images/favicon.ico" />
+	<script src='../js/three.js'></script>
+	<script type="text/javascript" src="./js/physi.js"></script>
+	<script src='../js/OrbitControls.js'></script>
+	<script src="../js/threex.keyboardstate.js"></script>
+	<script src="../js/Stats.js"></script>
+	<script src="../js/spin.js"></script>
+	<script src="../js/OBJLoader.js"></script>
+	<link rel="stylesheet" type="text/css" href="../css/style.css" />
+	<script src="../js/jquery-1.11.1.js"></script>
+	
+
+
+	<!-- Script pour la gestion des fenetres modales -->
+	<script>
+		var JeuDejaLancer = false;
+		var stats;
+		//definition de la fontion fermeture d'une fenetre
+		function FermetureDe(FenetreAFermer) {
+			var modal = $('#' + FenetreAFermer); //recupere l'id de la fenetre a fermer
+			modal.removeClass('show'); // fermeture de la modal associé à l'ID
+		}
+		//definition de la fontion Ouverture d'une fenetre  on ouvrira une fenetre et on fermera celle
+		//active pour avoir 1 seule fenetre
+		function OuvertureDe(FenetreAFermer, FenetreAouvrir) {
+			var modal = $('#' + FenetreAouvrir); //recupere l'id de la fenetre a ouvrir
+			var modal1 = $('#' + FenetreAFermer); //recupere l'id de la fenetre a fermé
+			modal.addClass('show'); // ouverture de la modal associé à l'ID
+			var close = $('.close'); // on recupere la variable X de la modale qui est ouverte
+
+			// en cliquant sur le bouton close/quitter on ferme tout et on arrête les fonctions
+			close.click(function (event) {
+				$(".modal").each(function () { //Pour chaque fenetre modal ayant la class '.modal'
+					$(this).removeClass('show'); //pour chaque modale présente on la ferme
+				});
+				modal.removeClass('show'); // on ferme la modale à fermer FenetreAfermer
+				modal1.addClass('show'); // on ouvre la modale à ouvrir FenetreAouvrir
+			});
+		}
+		//definition de la fontion fermetue  d'une fenetre  on fermera la fenetre active et on ouvrira celle désirée
+		function fermetureMenuOuvertureDe(FenetreAFermer, FenetreAouvrir) {
+			FermetureDe(FenetreAFermer);
+			OuvertureDe(FenetreAFermer, FenetreAouvrir);
+		}
+		// lorsque le jeu est lancé  on va changer le contenu du menu de départ
+		function ModificationDuMenu() {
+			$("#Bouton1").html("Nouveau"); // Modifie Jouer en Nouveau
+			$("#Bouton3").html("Retour"); // Modifie Score en Retour
+			$("#Bouton3").css("display", "block"); // pour laisser la touche retour visible apres l'état Gameover
+			// $("#Bouton3").css("display","none");//supression dans le menu de la touche Retour apres  GameOVer
+			$("#Bouton3").attr("onclick", "FermetureDe('Menu');"); // Modifie l'action de Aide en Retour
+
+		}
+	</script>
+
+	<!-- Script pour le spinner avant lancement du jeu -->
+	<script>
+		function Progressbar() {
+			$("#container").css("display", "");
+			var opts = {
+				lines : 15, // Nombre de ligne du cercle
+				length : 30, // longueur des lignes
+				width : 10, // Epaisseur de la ligne
+				radius : 60, //  la grandeur du Cercle
+				corners : 1, // arrondi de la ligne
+				rotate : 0, // rotation dans le sens de la montre
+				color : '#fff000', // couleur du cercle
+				speed : 1, // Vitesse de roation
+				trail : 60, //
+				shadow : false, // mode shadow
+				hwaccel : false, // accelaration et vitesse fonction du hardware
+				className : 'spinner', //  CSS classe associé
+				zIndex : 2e9, // z-index (defaults to 2000000000)
+				top : 'auto', // Top position relative
+				left : 'auto' // Left position relative
+			};
+			var target = document.getElementById('container');
+			var spinner = new Spinner(opts).spin(target);
+		}
+	</script>
+</head>
+
+
+
+
+<body>
+	<!-- Ouverture du Spinner -->
+	<div id="container"></div>
+
+	<!-- Compteur qui décompte le temps de jeux -->
+	<div id="compteur" class="timer"></div>
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AU MENU PRINCIPAL -->
+	<div class="modal blur-effect" id="Menu">
+		<div class="popup-content">
+			<div>
+				<button class="lien-bouton" onclick="LancementJeu();" id="Bouton1">Jouer</button>
+				<br/>
+				<br/>
+				<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Level');" id="Bouton2">Niveau</button>
+				<br/>
+				<br/>
+				<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Aide1');" id="Bouton3">Aide</button>
+				<br/>
+				<br/>
+				<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Menu','Credits');" id="Bouton4">Crédits</button>
+				<br/>
+				<br/>
+				<button class="lien-bouton" onclick="window.close();" id="Bouton5">Quitter</button>
+			</div>
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT A L AIDE DES TOUCHES pour l'icone Aide-->
+	<div class="modal blur-effect" id="Aide">
+		<div class="popup-content">
+			<div>
+				<br/>
+				<img class="espace" src="./images/touchedroite.png" />
+				<p class="alignement">Droite +X </p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchegauche.png" />
+				<p class="alignement">Gauche -X</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchemonte.png" />
+				<p class="alignement">Monter +Y</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchedescente.png" />
+				<p class="alignement">Descendre -Y</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchebas.png" />
+				<p class="alignement">Avancer +Z</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchehaut.png" />
+				<p class="alignement">Reculer -Z</p>
+				<br/>
+			</div>
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AUX OPTIONS de NIVEAU -->
+  	<div class="modal blur-effect" id="Level">
+        <div class="popup-content">
+            <div>
+            	<div><img class="espace" src="./images/facile_opt.png" />
+            		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');"  id="BoutonFacile">Facile</button><br/><br/>
+            	</div>
+            	<div><img class="espace" src="./images/moyen_opt.png" />
+            		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');" id="BoutonMoyen">Moyen</button><br/><br/>
+            	</div>
+            	<div><img class="espace" src="./images/difficile_opt.png" />
+            		<button class="lien-bouton" onclick="fermetureMenuOuvertureDe('Level','Menu');" id="BoutonDifficile">Avancé</button><br/><br/>
+            	</div>
+			</div>
+        </div>
+    </div>
+	<!-- FIN DE LA POPUP -->
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT A l'Aide dans le Menu principal -->
+	<div class="modal blur-effect" id="Aide1">
+		<div class="popup-content">
+
+			<div>
+				<img class="espace" src="./images/touchedroite.png" />
+				<p class="alignement">Droite +X </p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchegauche.png" />
+				<p class="alignement">Gauche -X</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchemonte.png" />
+				<p class="alignement">Monter +Y</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchedescente.png" />
+				<p class="alignement">Descendre -Y</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchebas.png" />
+				<p class="alignement">Avancer +Z</p>
+			</div>
+			<div>
+				<img class="espace" src="./images/touchehaut.png" />
+				<p class="alignement">Reculer -Z</p>
+			<br/>
+			</div>
+
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT GAME OVER -->
+	<div class="modal blur-effect" id="Gameover">
+		<div class="popup-content">
+
+			<div>
+				<p class="alignement">Game Over </p>
+			</div>
+
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT GAME OVER -->
+	<div class="modal blur-effect" id="Bravo">
+		<div class="popup-content">
+
+			<div>
+				<p class="alignement">Bravo Mission réussie </p>
+			</div>
+
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+	
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT GAME OVER -->
+	<div class="modal blur-effect" id="Perdu">
+		<div class="popup-content">
+
+			<div>
+				<p class="alignement">Perdu  !!!! hélas Ce n'est pas une base d'atterissage  </p>
+			</div>
+
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+	
+	
+	
+	<!-- CREATION DE LA FENETRE MODALE / POP UP  CORRESPONDANT AU CREDITS -->
+	<div class="modal blur-effect" id="Credits">
+		<div class="popup-content">
+
+			<div>
+				<h3>Crédits</h3>
+				<div class="defileParent">
+					<span class="defile">
+						Cosmos 2016 est un jeux en 3D conçu dans le cadre de l'ISN
+						<br/><br/>Conception graphique sous Blender 2.76 et Photoshop CS6 
+						<br/><br/>Langages JavaScript, Css3, Html5
+						<br/><br/>Développé par GBH et ACZ
+						<br/><br/>Version 2.1 
+						<br/><br/>© Copyright 2016 Acz-Gbh
+					</span>
+				</div>
+			</div>
+
+			<div class="close"></div>
+
+		</div>
+	</div>
+	<!-- FIN DE LA POPUP -->
+
+
+<!-- CONTENU DE LA PAGE 2 Icones à Droite et à Gauche-->
+
+	<img src="./images/icon-help.png" class="popup-button aide" data - modal="Aide">
+	<img src="./images/icon-menu.png" class="popup-button menu" data-modal="Menu">
+
+<!-- FIN DU COTENU DE LA PAGE -->
+
+	<div class="overlay"></div>
+	<!-- La div overlay -->
+	<!-- Le script qui crée la popup -->
+	<script src="../js/popup.js"></script>
+	<!-- Pour l'effet blur -->
+	<script src="../js/cssParser.js"></script>
+
+
+<!-- Déclaration des sons qui seront utilisés-->
+	<audio id="sounddown">
+		<source src="./audio/down.mp3" />
+	</audio>
+	<audio id="soundup">
+		<source src="./audio/up.mp3" />
+	</audio>
+	<audio id="soundright">
+		<source src="./audio/right.mp3" />
+	</audio>
+	<audio id="soundleft">
+		<source src="./audio/left.mp3" />
+	</audio>
+	<audio id="soundin">
+		<source src="./audio/in.mp3" />
+	</audio>
+	<audio id="soundinr">
+		<source src="./audio/inr.mp3" />
+	</audio>
+	<audio id="soundexplosion">
+		<source src="./audio/explosion.mp3" />
+	</audio>
+
+
+	<!--Démarrage du Jeu  -->
+
+	<script>
+	//Initialisation du dé-Compteur de temps et passage en parametre des navettes fonction du niveau
+	//
+
+	var countdownTimer;
+	var seconds = 200; // par defaut le Niveau sera Facile est iniitalisé à 200 secondes
+	var Jsonnavette = "navette1";
+
+	// Evenement sur Click initialisation du timer et du modele importé en fonction des niveaux
+	$("#BoutonFacile").click(function () {
+		seconds = 200; // le Niveau est Facile le temps de jeu est iniitalisé à 200 secondes
+		Jsonnavette = "navette1";
+	});
+	$("#BoutonMoyen").click(function () {
+		seconds = 150; // le Niveau est moyen le temps de jeu est initalisé à 150 secondes
+		Jsonnavette = "navette2";
+	});
+	$("#BoutonDifficile").click(function () {
+		seconds = 100; // le Niveau est moyen le temps de jeu est initalisé à 150 secondes
+		Jsonnavette = "navette3";
+	});
+
+	// Fonction qui va décompter le temps
+	function Decompte() {
+		var minutes = Math.round((seconds - 30) / 60); // convertit les secondes en minutes
+		var remainingSeconds = seconds % 60; // nombre de secondes restantes
+		var NbMenuAfficher = 0; //initialisation variable associé a la pause du timer
+
+		// convertit le nombre à un chiffre en 2 chiffres exemple 1:5 -> 01:05
+		if (remainingSeconds < 10) {
+			remainingSeconds = "0" + remainingSeconds;
+		}
+		//Le compteur initialisé avec les minutes et les secondes
+		document.getElementById('compteur').innerHTML = minutes + ":" + remainingSeconds;
+		$(".modal").each(function () {
+			if ($(this).hasClass("show")) {
+				NbMenuAfficher++;
+			}
+		});
+		// si une modale est ouverte interruption du compteur il est pause
+		if (NbMenuAfficher == 0) {
+			if (seconds == 0) {
+				clearInterval(countdownTimer);
+				OuvertureDe('Menu', 'Gameover');
+				//      $("#Bouton3").css("display","none");
+				document.getElementById('compteur').innerHTML = "Remise à zero en cours...";
+			} else {
+				seconds--; // dans la boucle Decompte() on enleve une seconde a chaque passage
+			}
+		}
+	}
+
+	// Ouverture de la Popup Menu principal
+	OuvertureDe('Menu', 'Menu');
+	
+	Physijs.scripts.worker = 'js/physijs_worker.js';
+	Physijs.scripts.ammo = './ammo.js';
+	
+	
+	
+
+	// Fonction Arret du jeu lorque le jeu est deja lancé en cette fonction réinitialise le jeu comme un nouveau démarage
+	function ArretJeu() {
+		$('canvas').remove(); // suppression de l'ecran du jeu
+		$('#FPS').remove(); // supression des statistiques
+
+	}
+
+	// Fonction Lancement du jeu
+	function LancementJeu() {
+		if (JeuDejaLancer === true) {
+			ArretJeu();
+		}
+
+		// Au lancement du jeu le spinner apparait le temps de charger la scnène
+		Progressbar();
+		JeuDejaLancer = true;
+		FermetureDe('Menu');
+
+		$(".modal").each(function () {
+			$(this).removeClass('show');
+		});
+
+		ModificationDuMenu();
+
+		// Initialisation renderer rendu de la scene
+		var renderer = new THREE.WebGLRenderer({
+				antialias : true
+			});
+		renderer.setClearColor(new THREE.Color('lightgrey'), 1)
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+
+		//initialisation des Variables
+		var onRenderFcts = [];
+		var navette = null;
+		var container,
+		scene,
+		navette,
+		moon,
+		moonbase;
+		var canvas = document.getElementById('canvas'),
+
+		// Position initiale de la navette + vélocité
+		xpos = 0,
+		ypos = -1,
+		zpos = 0;
+
+		var arretSonEnCours = false; // variable d'environnement pour le son basé à Faux sert en cas de relanchement des touches
+
+		var updateFcts = []; //initialisation de tout ce qui sera en interaction avec l'utilisateur en fait  toutes les actions faites par le joueurs
+
+
+		// initialisation de la Scéne
+		scene = new Physijs.Scene;
+		scene.setGravity(new THREE.Vector3( 0, -2, 0 ));
+		
+		// initialisation de la Caméra
+		var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 10000);
+		// 55 represente le FOv perspective chanmp de vision de la scene grand angle sur un appareil photo
+		//position de la caméra
+		camera.position.y = 50;
+		camera.position.z = 300;
+
+		// Controle avec la souris de la scene donne la possibilité de déplacer la camera et donc de voir l'ensemble de la scene
+		 			
+		 var controls = new THREE.OrbitControls(camera);
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Ajout  object dans une scene
+		//////////////////////////////////////////////////////////////////////////////////
+
+		//initialisation des textures du cube interne dans la  skybox
+
+		var urls = [
+			"images/planet_negx.jpg",
+			"images/planet_posx.jpg",
+			"images/planet_posy.jpg",
+			"images/planet_negy.jpg",
+			"images/planet_posz.jpg",
+			"images/planet_negz.jpg",
+		]
+
+		// Rappel de la Propriéré du positionnement des images dans une skybox
+		//"images/posx.jpg",
+		//"images/negx.jpg",
+		//"images/posy.jpg",
+		//"images/negy.jpg",
+		//"images/posz.jpg",
+		//"images/negz.jpg",
+
+		//Creation des textures de la skybox
+		var reflectionCube = new THREE.CubeTextureLoader().load(urls);
+		reflectionCube.format = THREE.RGBFormat;
+		var refractionCube = new THREE.CubeTextureLoader().load(urls);
+		refractionCube.mapping = THREE.CubeRefractionMapping;
+		refractionCube.format = THREE.RGBFormat;
+
+		// Création de la Skybox
+
+		var shader = THREE.ShaderLib["cube"];
+		shader.uniforms["tCube"].value = reflectionCube;
+
+		var material = new THREE.ShaderMaterial({
+
+				fragmentShader : shader.fragmentShader,
+				vertexShader : shader.vertexShader,
+				uniforms : shader.uniforms,
+				depthWrite : false,
+				side : THREE.BackSide
+
+			}),
+		// la taille de la Skybox cube et on ajoute la parie texture ShaderMaterial = material
+		mesh = new THREE.Mesh(new THREE.BoxGeometry(10000, 10000, 10000), material);
+		scene.add(mesh);
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Initialisation de 3 points de lumières
+		//////////////////////////////////////////////////////////////////////////////////
+
+		// ajout de la lumière ambient
+		var light = new THREE.AmbientLight(0x020202)
+			scene.add(light)
+			// ajout de la lumière face avant du décors
+			var light = new THREE.DirectionalLight('white', 1)
+			light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+			scene.add(light)
+			light.castShadow = true
+			light.shadow.camera.near = 0.01
+			light.shadow.camera.far = 250
+			light.shadow.camera.fov = 45
+			light.shadow.camera.left = -20
+			light.shadow.camera.right = 20
+			light.shadow.camera.top = 30
+			light.shadow.camera.bottom = -30
+			// light.shadowCameraVisible	= true
+			light.shadow.bias = 0.001
+			light.shadow.darkness = 0.6
+			light.shadow.mapSize.width = 2048
+			light.shadow.mapSize.height = 2048
+
+			// Statistiques FPS
+		render_stats = new Stats();
+		render_stats.domElement.style.position = 'absolute';
+		render_stats.domElement.style.bottom = '50px';
+		render_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( render_stats.domElement );
+		
+		physics_stats = new Stats();
+		physics_stats.domElement.style.position = 'absolute';
+		physics_stats.domElement.style.bottom = '0px';
+		physics_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( physics_stats.domElement );
+	
+		
+		var cubeGeo= new THREE.BoxGeometry(4,4,4);
+		var mat=new THREE.MeshLambertMaterial({color: 0xeeeeee});
+		var matCube= Physijs.createMaterial (mat,0.5,0.9);
+		var cube = new Physijs.BoxMesh(cubeGeo,matCube);
+		cube.position.x=1;
+		cube.position.y=300;
+		cube.rotation.z=Math.PI/3;
+		cube.name="cub";
+	
+	//scene.add(cube);
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//	Ajout de l'élément mesh navette												//
+		//////////////////////////////////////////////////////////////////////////////////
+		
+		
+		
+	//navette avec Physi
+	
+		var loader = new THREE.JSONLoader();
+		loader.load('../json/' + Jsonnavette + '.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,0.5,0); // friction elastic
+		navette = new Physijs.BoxMesh(geometry, matCube);
+		navette.translation = THREE.GeometryUtils.center(geometry);
+		navette.scale.x = navette.scale.y = navette.scale.z = 10;
+		navette.position.x = 1;
+		navette.position.y = 300;
+		navette.position.z = 1;
+		navette.name= "la Navette"
+		scene.add(navette);
+	
+			function resetNavette() {
+				navette.position.x = 1;
+				navette.position.y = 300;
+				navette.position.z = 1;
+			}
+			resetNavette()
+		}); 
+		
+		// Obj loader
+
+				var manager = new THREE.LoadingManager();
+				manager.onProgress = function ( item, loaded, total ) {
+					console.log( item, loaded, total );
+				};
+
+				// model
+				var loader = new THREE.OBJLoader( manager );
+				var matCube= Physijs.createMaterial (mat,0,0); // friction elastic
+				loader.load( '../json/scene1.obj', function ( object ) {
+					object.traverse( function ( child ) {
+						if ( child instanceof THREE.Mesh ) {
+							child.material = matCube;
+						}
+					} );
+					object.position.x = - 60;
+                    object.scale.x = 430;
+                    object.scale.y = 430;
+                    object.scale.z = 430;
+                    obj = object
+					scene.add( obj );
+
+				} );
+		
+	// Importation de la base alpha de blender et positionnement
+
+		var mesh = null;
+		var loader = new THREE.JSONLoader();
+		loader.load('./json/moonbase.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,0,0); // friction elastic
+		basealfa = new Physijs.BoxMesh(geometry, matCube,0);
+		basealfa.scale.x = basealfa.scale.y = basealfa.scale.z = 40;
+		basealfa.translation = THREE.GeometryUtils.center(geometry);
+		basealfa.position.x = -60;
+		basealfa.position.y = -30;
+		basealfa.position.z = 0;
+		basealfa.name="base alfa";
+		scene.add(basealfa);
+		
+			basealfa.addEventListener('collision',function(obj){
+	    	   	alert("Perdu collision entre "+this.name+" et "+obj.name);
+	    	   //OuvertureDe('Menu', 'Perdu');
+	    	   	});
+			
+		});
+
+		var mesh = null;
+		var loader = new THREE.JSONLoader();
+		loader.load('./json/baseok.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,0,0); // friction elastic
+		baseok = new Physijs.BoxMesh(geometry, matCube,0);
+		baseok.scale.x = baseok.scale.y = baseok.scale.z = 800;
+		baseok.translation = THREE.GeometryUtils.center(geometry);
+		baseok.position.x = 240;
+		baseok.position.y = 0;
+		baseok.position.z = -10;
+		baseok.name="sur piste";
+		scene.add(baseok);
+		
+			baseok.addEventListener('collision',function(obj){
+	    	   	alert("Gagné atterissage "+this.name+" de "+obj.name);
+	    	  // 	OuvertureDe('Menu', 'Bravo');
+	    	   
+	  		});
+			
+		});
+
+		var mesh = null;
+		var loader = new THREE.JSONLoader();
+		loader.load('./json/baseok.json', function (geometry, materials) {
+		var mat= new  THREE.MeshFaceMaterial(materials);
+		var matCube= Physijs.createMaterial (mat,0,0); // friction elastic
+		baseok1 = new Physijs.BoxMesh(geometry, matCube,0);
+		baseok1.scale.x = baseok1.scale.y = baseok1.scale.z = 800;
+		baseok1.translation = THREE.GeometryUtils.center(geometry);
+		baseok1.position.x = 80;
+		baseok1.position.y = 0;
+		baseok1.position.z = 300;
+		baseok1.rotation.y = 200;
+		baseok1.name="base alfa";
+		scene.add(baseok1);
+		
+			baseok1.addEventListener('collision',function(obj){
+	    	   	alert("Gagné atterissage "+this.name+" de "+obj.name);
+	    	   	// OuvertureDe('Menu', 'Bravo');
+	    	   
+	    	  });
+			
+		});
+
+
+
+		var solGeo= new THREE.BoxGeometry(100,10,200);
+		var matSol= Physijs.createMaterial (mat,0,0);
+		var sol = new Physijs.BoxMesh(solGeo,matSol,0);
+		sol.position.x=0;
+		sol.position.y=0;
+		sol.position.z=0;
+		sol.name="le sol de Cosmos 2016"
+	//	scene.add(sol);
+	
+
+		sol.addEventListener('collision',function(obj){
+	       alert("collision entre "+this.name+" et "+obj.name);
+		});
+
+
+		//Timer initialisation
+		countdownTimer = setInterval('Decompte()', 1000); // 1000ms  correspond en fait au décompte du compteur de 1s
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Parametrage clavier monter descendre droite gauche et avance recul  et rotation sur axe X,Y,Z
+		//////////////////////////////////////////////////////////////////////////////////
+		var keyboard = new THREEx.KeyboardState(renderer.domElement);
+		renderer.domElement.setAttribute("tabIndex", "0");
+		renderer.domElement.focus();
+
+		// Dans le temps on rajoute un déplacement de position pour donner un effet lissé introduction de la Vélocité
+		updateFcts.push(function (delta, now) {
+			ypos-=0.5;
+			// Action sur la touche E sera Monter
+			if (keyboard.pressed('E')) {
+				ypos-=1.5;
+			} else if (keyboard.pressed('A')) {
+				ypos+=1.5;
+			}
+			//Action sur les touches Fleche droite Fleche gauche Aller à Droite ou à Gauche
+			if (keyboard.pressed('right')) {
+				xpos+=1.5;
+			} else if (keyboard.pressed('left')) {
+				xpos-=1.5;
+			}
+			//Déplacement Axe Z
+			if (keyboard.pressed('down')) {
+				zpos+=1.5;
+			} else if (keyboard.pressed('up')) {
+				zpos-=1.5;
+			}
+			navette.setLinearVelocity(new THREE.Vector3(xpos, ypos, zpos));
+
+		})
+
+		// Seulement si on relache les touches action sur le son
+		keyboard.domElement.addEventListener('keyup', function (event) {
+			if (arretSonEnCours === false) // si la programmation de l'arret du son n'est pas programmé il lance l'arret du son
+			{
+				arretSonEnCours = true; // initialiiation a vrai
+				setInterval(arretson, 10000); // en millsecondes = 10s
+			}
+
+		})
+
+		function arretson() {
+			sounddown.pause();
+			soundup.pause();
+			soundright.pause();
+			soundleft.pause();
+			soundin.pause();
+			soundinr.pause();
+			arretSonEnCours = false; // en lien avec la boucle son lorque qu'il appel de la fonction arretson() la variable arret son repasse à Faux
+		}
+
+		// Si on change la taille de la fenetre , reinitialisation de la vue automatique c'est la partie responsive de l'écran jeu
+		window.addEventListener('resize', function () {
+			renderer.setSize(window.innerWidth, window.innerHeight)
+			camera.aspect = window.innerWidth / window.innerHeight
+				camera.updateProjectionMatrix()
+		}, false)
+
+
+
+
+
+
+
+		/////////////////////////////////////////////////////////////////////////////////
+		//		render=initalisation de la scene et de la camera 						//
+		//////////////////////////////////////////////////////////////////////////////////
+		updateFcts.push(function () {
+			// Mise a jour des stats FPS
+			render_stats.update();
+			physics_stats.update();
+			
+			scene.simulate();
+		
+
+			// La camera suit l'objet navette dans son déplacement  //
+			camera.lookAt(navette.position);
+
+			//lancement du Render du Jeu
+			renderer.render(scene, camera);
+
+			//Disparition de la barre spinner
+			$("#container").hide();
+
+		})
+
+		//////////////////////////////////////////////////////////////////////////////////
+		//		Boucle runner- Animation dans le temps														//
+		//////////////////////////////////////////////////////////////////////////////////
+		var lastTimeMsec = null
+			requestAnimationFrame(function animate(nowMsec) {
+				//Lancment de l animation
+				requestAnimationFrame(animate);
+			
+				// Mesure du temps
+				lastTimeMsec = lastTimeMsec || nowMsec - 1000 / 60
+					var deltaMsec = Math.min(200, nowMsec - lastTimeMsec)
+					lastTimeMsec = nowMsec
+					// Appel des fonctions et mise à jour
+					updateFcts.forEach(function (updateFn) {
+						updateFn(deltaMsec / 100, nowMsec / 100) // verifie toutes les 0,1 secondes si un evenement s'est produit
+					})
+			})
+	}
+	</script>
+</body>

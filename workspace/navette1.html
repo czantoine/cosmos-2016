@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+
+<!-- Initialisation d'une scene 
+Integration de l'objet navette importé de blender en format Json
+Gestion de la navette au clavier avec la librairie threex.keyboardstate.js
+integration du son quand la navette bouge -->
+
+<script src='../js/three.js'></script>
+<script src="../js/threex.keyboardstate.js"></script>
+<body style='margin: 0px; background-color: #bbbbbb; overflow: hidden;'>
+
+<audio id="sounddown"><source src="./audio/down.mp3" /></audio>
+<audio id="soundup"><source src="./audio/up.mp3" /></audio>
+<audio id="soundright"><source src="./audio/right.mp3" /></audio>
+<audio id="soundleft"><source src="./audio/left.mp3" /></audio>
+<audio id="soundin"><source src="./audio/in.mp3" /></audio>
+<audio id="soundinr"><source src="./audio/inr.mp3" /></audio>
+<script>
+	// initialisation renderer
+	var renderer	= new THREE.WebGLRenderer({
+		antialias	: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 1)
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+	
+	
+	
+	var updateFcts	= [];
+	var scene	= new THREE.Scene();
+	var camera	= new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000 );
+	camera.position.z = 3;
+	
+	var vx=0, vy=0, vz=0 
+   
+   	var Dt=2,
+    	Dfx=0, Dfy=-9.8, Dfz=0,
+    	ax=Dfx, ay=Dfy, az=Dfz,
+    	Dvx=ax*Dt, Dvy=ay*Dt, Dvz=az*Dt,
+    	vx=vx+Dvx, vy=vy+Dvy, vz=vz+Dvz,
+    	Dposx=vx*Dt, Dposy=vy*Dt, Dposz=vz*Dt;
+
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//	ajout de l'element mesh navette			//
+	//////////////////////////////////////////////////////////////////////////////////
+	var navette = null;
+    var loader = new THREE.JSONLoader();
+    loader.load('../json/navette.json', function(geometry, materials) {
+        navette = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+		navette.scale.x = navette.scale.y = navette.scale.z = 10;
+        navette.translation = THREE.GeometryUtils.center(geometry);
+		
+		navette.position.x = 50 + Dposx;
+		navette.position.y = 50 + Dposy;
+		navette.position.z =-200 + Dposz;
+
+        scene.add(navette);
+    });
+    
+ 
+    
+	//add sunlight 
+	//var light = new THREE.SpotLight(); 
+	//light.position.set(0,5000,0); 
+	//scene.add(light);  
+	
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		initialisation de 3 points de lumières
+	//////////////////////////////////////////////////////////////////////////////////
+	
+		// add a ambient light
+		var light	= new THREE.AmbientLight( 0x020202 )
+		scene.add( light )
+		// add a light front right
+		var light	= new THREE.DirectionalLight('white', 1)
+		light.position.set(0.5, 0.5, 2).multiplyScalar(10)
+		scene.add( light )
+		light.castShadow	= true
+		light.shadowCameraNear	= 0.01
+		light.shadowCameraFar	= 250
+		light.shadowCameraFov	= 45
+		light.shadowCameraLeft	= -20
+		light.shadowCameraRight	=  20
+		light.shadowCameraTop	=  30
+		light.shadowCameraBottom= -30
+		// light.shadowCameraVisible	= true
+		light.shadowBias	= 0.001
+		light.shadowDarkness	= 0.6
+		light.shadowMapWidth	= 2048
+		light.shadowMapHeight	= 2048
+		// // add a light behind
+		// var light	= new THREE.DirectionalLight('white', 0.75)
+		// light.position.set(-0.5, -0.5, -2)
+	
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Parametrage clavier monter descendre droite gauche et zoom et rotation
+	//////////////////////////////////////////////////////////////////////////////////
+	var keyboard	= new THREEx.KeyboardState(renderer.domElement);
+	renderer.domElement.setAttribute("tabIndex", "0");
+	renderer.domElement.focus();
+	
+	updateFcts.push(function(delta, now){
+		if( keyboard.pressed('down') ){
+			sounddown.play();
+			navette.position.y -= 10 * delta;
+			navette.scale.x = navette.scale.y = navette.scale.z +=0.1;
+		}else if( keyboard.pressed('up') ){
+			soundup.play();
+			navette.position.y += 20 * delta;
+			navette.scale.x = navette.scale.y = navette.scale.z -=0.1;
+		}
+		if( keyboard.pressed('right') ){
+			soundright.play();
+			navette.position.x += 20 * delta;		
+		}else if( keyboard.pressed('left') ){
+			soundleft.play();
+			navette.position.x -= 20 * delta;		
+		}
+		if( keyboard.pressed('A') ){
+			soundin.play();
+			navette.rotation.y -=0.001 ;		
+		}else if( keyboard.pressed('E') ){
+			soundinr.play();
+			navette.rotation.y +=0.001 ;
+		}
+	})
+
+	// seulement si on relache les touches up
+	keyboard.domElement.addEventListener('keyup', function(event){
+	sounddown.pause();
+	soundup.pause();
+	soundright.pause();
+	soundleft.pause();
+	soundin.pause();
+	soundinr.pause();
+	
+//		if( keyboard.eventMatches(event, 'a') )	mesh.scale.x	*= 2
+//		if( keyboard.eventMatches(event, 'd') )	mesh.scale.x	/= 2
+	})
+
+
+
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render de la scene						//
+	//////////////////////////////////////////////////////////////////////////////////
+	updateFcts.push(function(){
+		renderer.render( scene, camera );		
+	})
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		loop runner							//
+	//////////////////////////////////////////////////////////////////////////////////
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		updateFcts.forEach(function(updateFn){
+			updateFn(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+
+
+	
+</script></body>

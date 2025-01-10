@@ -1,0 +1,189 @@
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<title>Compound Shapes - Physijs</title>
+	
+	<link rel="stylesheet" type="text/css" href="css/styles1.css" />
+	
+	<script type="text/javascript" src="./js/three.min.js"></script>
+	<script type="text/javascript" src="./js/Stats.js"></script>
+	<script type="text/javascript" src="./js/physi.js"></script>
+	<script src='./js/OrbitControls.js'></script>
+	<script src="./js/threex.keyboardstate.js"></script>
+	<script src="./js/jquery-1.11.1.js"></script>
+	
+	<script type="text/javascript">
+	
+	'use strict';
+	
+	Physijs.scripts.worker = '../js/physijs_worker.js';
+	Physijs.scripts.ammo = '../js/ammo.js';
+	
+	var initScene, render, renderer, render_stats, physics_stats, scene, ground, light, camera, createShape ,
+		ground_material, chair_material, loader;
+	
+	initScene = function() {
+		renderer = new THREE.WebGLRenderer({ antialias: true });
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMapSoft = true;
+		document.body.appendChild( renderer.domElement );
+		
+		render_stats = new Stats();
+		render_stats.domElement.style.position = 'absolute';
+		render_stats.domElement.style.top = '0px';
+		render_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( render_stats.domElement );
+		
+		physics_stats = new Stats();
+		physics_stats.domElement.style.position = 'absolute';
+		physics_stats.domElement.style.top = '50px';
+		physics_stats.domElement.style.zIndex = 100;
+		document.body.appendChild( physics_stats.domElement );
+		
+		scene = new Physijs.Scene;
+		scene.setGravity(new THREE.Vector3( 0, -5, 0 ));
+		scene.addEventListener(
+			'update',
+			function() {
+				scene.simulate( undefined, 2 );
+				physics_stats.update();
+			}
+		);
+		
+		camera = new THREE.PerspectiveCamera(
+			65,
+			window.innerWidth / window.innerHeight,
+			0.01,
+			10000
+		);
+		camera.position.set( 60, 50, 60 );
+		camera.lookAt( scene.position );
+		scene.add( camera );
+		
+		var controls	= new THREE.OrbitControls(camera);
+		
+		// Light
+		light = new THREE.DirectionalLight( 0xFFFFFF );
+		light.position.set( 20, 40, -15 );
+		light.target.position.copy( scene.position );
+		light.castShadow = true;
+		light.shadowCameraLeft = -60;
+		light.shadowCameraTop = -60;
+		light.shadowCameraRight = 60;
+		light.shadowCameraBottom = 60;
+		light.shadowCameraNear = 20;
+		light.shadowCameraFar = 200;
+		light.shadowBias = -.0001
+		light.shadowMapWidth = light.shadowMapHeight = 2048;
+		light.shadowDarkness = .7;
+		scene.add( light );
+
+		// Loader
+		loader = new THREE.TextureLoader();
+		
+		// Materials
+		ground_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ map: loader.load( 'images/rocks.jpg' ) }),
+			.8, // high friction
+			.4 // low restitution
+		);
+		ground_material.map.wrapS = ground_material.map.wrapT = THREE.RepeatWrapping;
+		ground_material.map.repeat.set( 3, 3 );
+		
+		chair_material = Physijs.createMaterial(
+			new THREE.MeshLambertMaterial({ map: loader.load( 'images/wood.jpg' ) }),
+			0.00001
+		);
+		chair_material.map.wrapS = chair_material.map.wrapT = THREE.RepeatWrapping;
+		chair_material.map.repeat.set( .25, .25 );
+		
+		//Texture "fil" pour la Navette et le terrain	
+		var wireMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe:true } );
+		var wireMaterial1 = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe:true } );
+		
+		// Ground
+		var mesh = null;
+	    var loader = new THREE.JSONLoader();
+	    loader.load('./json/moon.json', function(geometry, materials) {
+	        var decor = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+	        decor.translation = THREE.GeometryUtils.center(geometry);
+			var terrain = new Physijs.ConcaveMesh(
+			    geometry, 
+			    wireMaterial,
+			    0
+			);
+	
+	        scene.add(decor);
+	        scene.add(terrain);
+	    });
+		createShape ();
+		
+		requestAnimationFrame( render );
+		scene.simulate();
+	};
+	
+	createShape  = (function() {
+		var addshapes = true,
+			shapes = 0,
+			sphere_geometry = new THREE.SphereGeometry( 1.5, 32, 32 ),
+			doCreateShape;
+		
+		doCreateShape = function() {
+			var shape, material = new THREE.MeshLambertMaterial({ opacity: 0, transparent: true });
+				var wireMaterial1 = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe:true } );
+
+			shape = new Physijs.SphereMesh(
+				sphere_geometry,
+				wireMaterial1,
+				undefined,
+				{ restitution: Math.random() * 1.5 }
+			);
+				
+			shape.material.color.setRGB( Math.random() * 100 / 100, Math.random() * 100 / 100, Math.random() * 100 / 100 );
+			shape.castShadow = true;
+			shape.receiveShadow = true;
+			
+			shape.position.set(
+				Math.random() * 30 - 15,
+				20,
+				Math.random() * 30 - 15
+			);
+			
+			shape.rotation.set(
+				Math.random() * Math.PI,
+				Math.random() * Math.PI,
+				Math.random() * Math.PI
+			);
+			
+			if ( addshapes ) {
+				shape.addEventListener( 'ready', createShape );
+			}
+			scene.add( shape );
+			
+		};
+		
+		return function() {
+			setTimeout( doCreateShape, 1000 );
+		};
+	})();
+	
+	render = function() {
+		requestAnimationFrame( render );
+		renderer.render( scene, camera );
+		render_stats.update();
+	};
+	
+	window.onload = initScene;
+	
+	</script>
+</head>
+
+<body>
+	
+</body>
+
+</html>
