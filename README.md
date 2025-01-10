@@ -88,11 +88,8 @@ In *Space: 1999*, nuclear waste stored on the Moon causes a massive explosion, s
 	
 	### [**index.html**](workspace/index.html)
 	- Complete scene setup with all advanced features, including shuttle controls, sound integration, difficulty levels, and game dynamics.  
-	
-	### **navette.html to navette21.html**
-	Each file adds new functionalities to the project:  
-	
-	---
+
+ 	---
 	
 	### [**navette.html**](workspace/navette.html)
 	- Basic scene setup.  
