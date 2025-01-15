@@ -69,17 +69,17 @@ In *Space: 1999*, nuclear waste stored on the Moon causes a massive explosion, s
 
 1. Pull the prebuilt Docker image:  
    ```bash  
-   docker pull czantoine/cosmos-2016  
+   docker pull --platform linux/amd64 czantoine/cosmos-2016
    ```  
 
 2. Run the Docker container:  
    ```bash  
-   docker run -d -p 8080:80 czantoine/cosmos-2016  
+   docker run -d -p 8080:80 czantoine/cosmos-2016
    ```  
 
 3. Access the game in your browser at:  
    ```
-   http://localhost:8080  
+   http://localhost:8080
    ```  
 
 4. 🗂️ Incremental features or enhancements
